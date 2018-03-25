@@ -3,8 +3,9 @@ package com.starschema.dimension.role;
 import com.starschema.annotations.dimensions.*;
 import com.starschema.annotations.facts.Fact;
 import com.starschema.annotations.facts.FactJunkDimension;
-import com.starschema.annotations.general.Table;
-import com.starschema.columnSelector.CommonColumnSelector;
+import com.starschema.annotations.common.Table;
+import com.starschema.columnSelector.AnnotatedJunkDimensionColumnSelector;
+import com.starschema.columnSelector.JunkDimensionColumnSelector;
 import com.starschema.dimension.junk.IJunkDimension;
 import com.starschema.lookup.AbstractLookup;
 import lombok.Getter;
@@ -20,10 +21,13 @@ import java.util.stream.Collectors;
 @Getter
 public class JunkDimensionRole extends AbstractDimensionRole {
     private final FactJunkDimension factJunkDimension;
+    private final JunkDimensionColumnSelector junkDimensionColumnSelector;
 
     public JunkDimensionRole(Field field) {
         super(field);
         this.factJunkDimension = field.getAnnotation(FactJunkDimension.class);
+        this.junkDimensionColumnSelector = new AnnotatedJunkDimensionColumnSelector(field.getType());
+
     }
 
     /***
@@ -53,8 +57,7 @@ public class JunkDimensionRole extends AbstractDimensionRole {
         if(StringUtils.isNotEmpty(alias)){
             columnAlias = String.format("%s.%s", alias, columnAlias);
         }
-        Class<?> junkDimensionClass = field.getType();
-        return CommonColumnSelector.getCheckSumColumn(Fact.class, CheckSum.class, junkDimensionClass, columnAlias).get();
+        return junkDimensionColumnSelector.calculateCheckSumColumn(Fact.class, CheckSum.class, columnAlias).get();
     }
 
 

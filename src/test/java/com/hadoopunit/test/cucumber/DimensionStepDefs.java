@@ -10,6 +10,7 @@ import com.hadoopunit.test.sources.BeanSourceMock;
 import com.hadoopunit.test.spark.TestSparkSession;
 import com.hadoopunit.test.utils.CucumberUtils;
 import com.starschema.ProcessorFactory;
+import com.starschema.columnSelector.AnnotatedDimensionColumnSelector;
 import com.starschema.dimension.Dimension;
 import com.starschema.dimension.DimensionBean;
 import com.starschema.dimension.DimensionProcessor;
@@ -130,7 +131,8 @@ public class DimensionStepDefs implements En {
                     stagingDimensionMockSource,
                     dimensionSink,
                     dimensionLookupSink,
-                    LocalDate.parse(inventoryDate, localDateFormatter)
+                    LocalDate.parse(inventoryDate, localDateFormatter),
+                    new AnnotatedDimensionColumnSelector<>(targetClass)
             );
         }
 

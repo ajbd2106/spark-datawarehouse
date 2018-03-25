@@ -21,4 +21,13 @@ public interface ISink extends Serializable {
      * @throws SQLException
      */
     void update(Dataset<Row> rowDataset, String functionalIdFieldName) throws SQLException;
+
+    default void renameTable(String oldName, String newName) {
+        //do nothing
+    };
+
+
+    default void dropTable(String name) {
+        //do nothing
+    };
 }

@@ -24,13 +24,16 @@ public class ListSink implements ISink {
     }
 
     @Override
-    public void update(String tableName, Dataset<Row> rowDataset, String keyFieldName) throws SQLException {
-        this.updateResult = rowDataset.collectAsList();
-        this.updateKeyFieldName = keyFieldName;
-        this.updateTableName = tableName;
+    public void delete(Integer date, String inventoryDateFieldName) {
+
     }
 
-    public void clear(){
+    @Override
+    public void update(Dataset<Row> rowDataset, String functionalIdFieldName) throws SQLException {
+
+    }
+
+    public void clear() {
         insertResult.clear();
         updateResult.clear();
         updateTableName = StringUtils.EMPTY;

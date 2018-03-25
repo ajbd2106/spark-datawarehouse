@@ -4,7 +4,7 @@ import com.hadoopunit.test.sink.ListSink;
 import com.sink.ISink;
 import com.source.IFactSourceFactory;
 import com.source.ISource;
-import com.starschema.annotations.general.Table;
+import com.starschema.annotations.common.Table;
 import com.starschema.dimension.junk.IJunkDimension;
 import lombok.Getter;
 

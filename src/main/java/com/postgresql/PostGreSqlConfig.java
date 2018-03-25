@@ -7,8 +7,8 @@ public class PostGreSqlConfig {
 
     private final String driver = "org.postgresql.Driver";
     private final String url = "jdbc:postgresql://localhost:5432/postgres";
-    private final String user = "marc";
-    private final String password = "TP1012!DC";
+    private final String user = "postgres";
+    private final String password = "TP0312!DC";
 
     private final String urlWithCredentials = String.format("%s?user=%s&password=%s", url, user, password);
 

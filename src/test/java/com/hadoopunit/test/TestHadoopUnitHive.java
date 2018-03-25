@@ -1,8 +1,9 @@
 package com.hadoopunit.test;
 
 import com.spark.SparkSessionFactory;
-import com.starschema.dimension.DimensionBean;
+import com.starschema.columnSelector.AnnotatedDimensionColumnSelector;
 import com.starschema.columnSelector.DimensionColumnSelector;
+import com.starschema.dimension.DimensionBean;
 import fr.jetoile.hadoopunit.Component;
 import fr.jetoile.hadoopunit.HadoopBootstrap;
 import fr.jetoile.hadoopunit.HadoopUnitConfig;
@@ -41,8 +42,9 @@ public class TestHadoopUnitHive implements Serializable {
 
         SparkSession spark = SparkSessionFactory.createHiveSparkSession("local[*]", "test");
 
+        DimensionColumnSelector dimensionColumnSelector = new AnnotatedDimensionColumnSelector(DimensionBean.class);
         Dataset<Row> row = spark.read().json("src/main/resources/stagingTable.json")
-                .select(DimensionColumnSelector.getStageColumns(DimensionBean.class));
+                .select(dimensionColumnSelector.getStageColumns());
 
         spark.sql("CREATE TABLE default.dimension (functionalId STRING, name STRING, lookupType String, SCD1CheckSum String, SCD2CheckSum String) STORED AS ORC");
 

@@ -1,5 +1,6 @@
 package com.starschema;
 
-public interface Processor {
+@FunctionalInterface
+public interface Processor<T> {
     void process();
 }

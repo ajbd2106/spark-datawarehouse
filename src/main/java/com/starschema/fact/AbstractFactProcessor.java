@@ -4,17 +4,15 @@ import com.sink.ISink;
 import com.source.IFactSourceFactory;
 import com.source.ISource;
 import com.source.SourceFactory;
+import com.starschema.Alias;
 import com.starschema.Processor;
 import com.starschema.ProcessorFactory;
-import com.starschema.annotations.dimensions.*;
-import com.starschema.annotations.facts.InventoryDate;
-import com.starschema.columnSelector.CommonColumnSelector;
 import com.starschema.columnSelector.FactColumnSelector;
+import com.starschema.columnSelector.AnnotatedJunkDimensionColumnSelector;
 import com.starschema.columnSelector.JunkDimensionColumnSelector;
 import com.starschema.dimension.junk.IJunkDimension;
 import com.starschema.dimension.junk.JunkDimensionProcessor;
 import com.starschema.dimension.role.IDimensionRole;
-import com.utils.ReflectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.spark.sql.*;
 
@@ -27,7 +25,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.spark.sql.functions.*;
 
-public abstract class AbstractFactProcessor<T extends IFact> implements Processor {
+public abstract class AbstractFactProcessor<T extends IFact> implements Processor<T> {
 
     protected final DateTimeFormatter inventoryDateFormatter = DateTimeFormatter.ofPattern("yyyyMMdd");
 
@@ -38,8 +36,11 @@ public abstract class AbstractFactProcessor<T extends IFact> implements Processo
     protected final ISink factSink;
     protected final LocalDate inventoryDate;
     protected final boolean isHistoricalLoad;
+    protected final FactColumnSelector factColumnSelector;
 
-    public AbstractFactProcessor(SparkSession sparkSession, Class<T> factClass, LocalDate inventoryDate, IFactSourceFactory factSourceFactory, ISource<T> factStagingSource, ISink factSink, boolean isHistoricalLoad) {
+    public AbstractFactProcessor(SparkSession sparkSession, Class<T> factClass, LocalDate inventoryDate, IFactSourceFactory factSourceFactory, ISource<T> factStagingSource, ISink factSink, boolean isHistoricalLoad,
+                                 FactColumnSelector factColumnSelector
+                                 ) {
         this.sparkSession = sparkSession;
         this.factClass = factClass;
         this.factStagingSource = factStagingSource;
@@ -47,6 +48,7 @@ public abstract class AbstractFactProcessor<T extends IFact> implements Processo
         this.factSink = factSink;
         this.inventoryDate = inventoryDate;
         this.isHistoricalLoad = isHistoricalLoad;
+        this.factColumnSelector = factColumnSelector;
     }
 
     @Override
@@ -56,19 +58,19 @@ public abstract class AbstractFactProcessor<T extends IFact> implements Processo
         Dataset<T> factStagingData = factStagingSource.load(sparkSession, factEncoder);
 
         //process junk dimensions, if there are any declared in fact table (with annotation @FactJunkDimension)
-        Map<Class, List<Field>> junkDimensions = FactColumnSelector.getJunkDimensions(factClass);
+        Map<Class, List<Field>> junkDimensions = factColumnSelector.getJunkDimensions();
         for (Map.Entry<Class, List<Field>> entry : junkDimensions.entrySet()) {
             processJunkDimension(entry, factStagingData);
         }
 
         //get all possible lookups to look at. It may be a lookup dimension table or a junk dimension table
-        List<IDimensionRole> dimensionsRoles = FactColumnSelector.getLookupDimension(factClass);
+        List<IDimensionRole> dimensionsRoles = factColumnSelector.getLookupDimension();
 
         //here we join the fact table with all the dimensions
         Dataset<Row> joinedFactTable = joinFactTableWithDimension(factStagingData, dimensionsRoles);
 
         Integer inventoryDateTechId = Integer.valueOf(inventoryDateFormatter.format(inventoryDate));
-        String inventoryDateFieldName = FactColumnSelector.getInventoryDateName(factClass);
+        String inventoryDateFieldName = factColumnSelector.getInventoryDateName();
 
         //finally collect the result. if technical id has not been found, put one by default.
         //if technical id has been found, copy it in the fact table appropriate field
@@ -85,7 +87,7 @@ public abstract class AbstractFactProcessor<T extends IFact> implements Processo
     protected abstract Dataset<Row> getFinalColumns(Dataset<Row> joinedFactTable, List<IDimensionRole> dimensionsRoles, Integer inventoryDateTechId, String inventoryDateFieldName);
 
     private Dataset<Row> joinFactTableWithDimension(Dataset<T> factTable, List<IDimensionRole> allDimensionsRoles) {
-        Dataset<Row> joinedFactTable = factTable.select(factTable.alias(CommonColumnSelector.ALIAS_CURRENT).col("*"));
+        Dataset<Row> joinedFactTable = factTable.select(factTable.alias(Alias.CURRENT.getLabel()).col("*"));
 
         Map<Class<?>, List<IDimensionRole>> dimensionGroupedByRole = allDimensionsRoles
                 .stream()
@@ -98,9 +100,9 @@ public abstract class AbstractFactProcessor<T extends IFact> implements Processo
             Dataset<?> lookupTable = getLookupTable(lookupType);
 
             for (IDimensionRole dimensionRole : dimensionRoleEntry.getValue()) {
-                Column factFunctionalId = dimensionRole.getFunctionalId(CommonColumnSelector.ALIAS_CURRENT);
+                Column factFunctionalId = dimensionRole.getFunctionalId(Alias.CURRENT.getLabel());
                 String lookupTableAlias = dimensionRole.getAlias();
-                String lookUpFunctionalIdField = FactColumnSelector.getLookupFunctionalId(lookupType, lookupTableAlias);
+                String lookUpFunctionalIdField = factColumnSelector.getLookupFunctionalId(lookupType, lookupTableAlias);
 
                 //joining with lookup functional id and field name in fact table
                 joinedFactTable = joinedFactTable.join(lookupTable.alias(lookupTableAlias),
@@ -154,7 +156,8 @@ public abstract class AbstractFactProcessor<T extends IFact> implements Processo
                 factSourceFactory.getJunkDimensionSource(junkDimensionClass),
                 SourceFactory.createRowDataSetSource(junkDimensionDataSet),
                 factSourceFactory.getJunkDimensionSink(junkDimensionClass),
-                factSourceFactory.getJunkDimensionLookupSink(junkDimensionClass)
+                factSourceFactory.getJunkDimensionLookupSink(junkDimensionClass),
+                new AnnotatedJunkDimensionColumnSelector<>(junkDimensionClass)
         );
         dimensionProcessor.process();
     }
@@ -178,7 +181,7 @@ public abstract class AbstractFactProcessor<T extends IFact> implements Processo
         return factTable
                 .select(explode(array(columns)))
                 .distinct()
-                .select(JunkDimensionColumnSelector.getAllJunkDimensionColumnsAsOriginal("col", currentDimensionEntry.getKey()));
+                .select(factColumnSelector.removeAliasFromColumns("col", currentDimensionEntry.getKey()));
     }
 
 }

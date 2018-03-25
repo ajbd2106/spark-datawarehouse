@@ -3,7 +3,7 @@ package com.source;
 import com.sink.ISink;
 import com.sink.SinkFactory;
 import com.sink.SinkType;
-import com.starschema.annotations.general.Table;
+import com.starschema.annotations.common.Table;
 import com.starschema.dimension.Dimension;
 import com.starschema.dimension.junk.IJunkDimension;
 import com.starschema.lookup.AbstractLookup;

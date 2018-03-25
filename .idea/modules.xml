@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/../referential/referential.iml" filepath="$PROJECT_DIR$/../referential/referential.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../referential/referential-cache/referential-cache.iml" filepath="$PROJECT_DIR$/../referential/referential-cache/referential-cache.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../referential/referential-cache-impl/referential-cache-impl.iml" filepath="$PROJECT_DIR$/../referential/referential-cache-impl/referential-cache-impl.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../referential/referential-source-mock/referential-source-mock.iml" filepath="$PROJECT_DIR$/../referential/referential-source-mock/referential-source-mock.iml" />
+      <module fileurl="file://$PROJECT_DIR$/spark-datawarehouse.iml" filepath="$PROJECT_DIR$/spark-datawarehouse.iml" />
+    </modules>
+  </component>
+</project>

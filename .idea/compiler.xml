@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name="referential-cache" />
+        <module name="referential-cache-impl" />
+        <module name="referential-source-mock" />
+        <module name="spark-datawarehouse" />
+      </profile>
+    </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="referential" target="1.5" />
+      <module name="referential-cache" target="1.8" />
+      <module name="referential-cache-impl" target="1.8" />
+      <module name="referential-source-mock" target="1.8" />
+      <module name="spark-datawarehouse" target="1.8" />
+    </bytecodeTargetLevel>
+  </component>
+</project>

@@ -5,7 +5,7 @@ import com.starschema.annotations.dimensions.FunctionalId;
 import com.starschema.annotations.dimensions.TechnicalId;
 import com.starschema.annotations.dimensions.UpdatedDate;
 import com.starschema.annotations.facts.Fact;
-import com.starschema.annotations.general.Table;
+import com.starschema.annotations.common.Table;
 import com.starschema.lookup.JunkDimensionLookup;
 import lombok.Data;
 

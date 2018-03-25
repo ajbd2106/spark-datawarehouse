@@ -5,7 +5,7 @@ import com.starschema.annotations.dimensions.SCD1;
 import com.starschema.annotations.dimensions.SCD2;
 import com.starschema.annotations.dimensions.TechnicalId;
 import com.starschema.annotations.facts.FactDimension;
-import com.starschema.annotations.general.Table;
+import com.starschema.annotations.common.Table;
 import lombok.Getter;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.spark.sql.Column;

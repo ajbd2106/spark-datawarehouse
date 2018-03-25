@@ -1,7 +1,7 @@
 package com.hadoopunit.test.bean.dimension;
 
 import com.starschema.annotations.dimensions.*;
-import com.starschema.annotations.general.Table;
+import com.starschema.annotations.common.Table;
 import com.starschema.dimension.Dimension;
 import com.starschema.lookup.PartyLookup;
 import lombok.Data;

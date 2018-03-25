@@ -1,6 +1,6 @@
 package com.starschema.lookup;
 
-import com.starschema.annotations.general.Table;
+import com.starschema.annotations.common.Table;
 import lombok.Data;
 
 @Table(name = "lookupTable")

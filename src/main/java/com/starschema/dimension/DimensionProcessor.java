@@ -3,9 +3,9 @@ package com.starschema.dimension;
 import com.sink.ISink;
 import com.source.ISource;
 import com.spark.SparkFunctionUtils;
+import com.starschema.Alias;
 import com.starschema.Processor;
 import com.starschema.annotations.dimensions.*;
-import com.starschema.columnSelector.CommonColumnSelector;
 import com.starschema.columnSelector.DimensionColumnSelector;
 import com.utils.ReflectUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +21,7 @@ import static org.apache.spark.sql.functions.col;
 import static org.apache.spark.sql.functions.lit;
 
 @Slf4j
-public class DimensionProcessor<T extends Dimension> implements Processor {
+public class DimensionProcessor<T extends Dimension> implements Processor<T> {
 
     private final transient SparkSession sparkSession;
     private final Class<T> dimensionClass;
@@ -30,8 +30,10 @@ public class DimensionProcessor<T extends Dimension> implements Processor {
     private final ISink dimensionSink;
     private final ISink lookupSink;
     private final LocalDate inventoryDate;
+    private final DimensionColumnSelector dimensionColumnSelector;
 
-    public DimensionProcessor(SparkSession sparkSession, Class<T> dimensionClass, ISink dimensionSink, ISink lookupSink, ISource<T> masterDimensionSource, ISource stagingDimensionSource, LocalDate inventoryDate) {
+    public DimensionProcessor(SparkSession sparkSession, Class<T> dimensionClass, ISink dimensionSink, ISink lookupSink, ISource<T> masterDimensionSource, ISource stagingDimensionSource, LocalDate inventoryDate,
+                              DimensionColumnSelector dimensionColumnSelector) {
         validateProcessorClass(dimensionClass);
 
         this.dimensionClass = dimensionClass;
@@ -41,21 +43,22 @@ public class DimensionProcessor<T extends Dimension> implements Processor {
         this.masterDimensionSource = masterDimensionSource;
         this.stagingDimensionSource = stagingDimensionSource;
         this.inventoryDate = inventoryDate;
+        this.dimensionColumnSelector = dimensionColumnSelector;
     }
 
     @Override
     public void process() {
 
-        Column[] allColumnsFromCurrentAlias = DimensionColumnSelector.getAllColumnsAsOriginal(CommonColumnSelector.ALIAS_CURRENT, dimensionClass);
+        Column[] allColumnsFromCurrentAlias = dimensionColumnSelector.getAllColumnsAsOriginal(Alias.CURRENT.getLabel());
 
         Encoder<T> dimensionEncoder = Encoders.bean(dimensionClass);
 
         Dataset<Row> originalStagingTable = stagingDimensionSource.load(sparkSession);
         Dataset<T> currentTable = masterDimensionSource.load(sparkSession, dimensionEncoder);
 
-        String technicalIdName = DimensionColumnSelector.getTechnicalIdName(dimensionClass);
-        String currentFlagName = DimensionColumnSelector.getCurrentFlagName(dimensionClass);
-        String functionalName = DimensionColumnSelector.getFunctionalName(dimensionClass);
+        String technicalIdName = dimensionColumnSelector.getTechnicalIdName();
+        String currentFlagName = dimensionColumnSelector.getCurrentFlagName();
+        String functionalName = dimensionColumnSelector.getFunctionalName();
 
         Long maxId = SparkFunctionUtils.getMaxRowId(currentTable, technicalIdName);
 
@@ -63,7 +66,7 @@ public class DimensionProcessor<T extends Dimension> implements Processor {
         Dataset<T> activeLines = getActiveLines(currentTable, currentFlagName);
 
         //here we calculate scd1 and scd2 checksum
-        Dataset<Row> stagingTable = originalStagingTable.select(DimensionColumnSelector.getStageColumns(dimensionClass));
+        Dataset<Row> stagingTable = originalStagingTable.select(dimensionColumnSelector.getStageColumns());
 
         //active lines joined with staging table
         Dataset<Row> fullJoinDataset = fullJoinCurrentAndStaging(stagingTable, functionalName, activeLines);
@@ -103,6 +106,7 @@ public class DimensionProcessor<T extends Dimension> implements Processor {
         //create fake row lines
         //TODO: if a column has been added in a release, fake row should be automatically recalculated. Currently, code only handles first shot scenario.
         Optional<Dataset<T>> fakeRowDataSet = getFakeRowDataSet(activeLines, functionalName, activeLinesNotInStaging, dimensionEncoder);
+
         if (fakeRowDataSet.isPresent()) {
             activeLinesNotInStaging = activeLinesNotInStaging.union(fakeRowDataSet.get());
         }
@@ -127,6 +131,10 @@ public class DimensionProcessor<T extends Dimension> implements Processor {
 
         dimensionSink.insert(allRows.select(col("*")));
         lookupSink.insert(idLookupTable);
+
+        dimensionSink.dropTable(dimensionColumnSelector.getOldTable());
+        dimensionSink.renameTable(dimensionColumnSelector.getMasterTableName(), dimensionColumnSelector.getOldTable());
+        dimensionSink.renameTable(dimensionColumnSelector.getNewTableName(), dimensionColumnSelector.getMasterTableName());
     }
 
     private void validateProcessorClass(Class<T> dimensionClass) {
@@ -149,23 +157,22 @@ public class DimensionProcessor<T extends Dimension> implements Processor {
     }
 
     private <U> long getCount(Optional<Dataset<U>> dataset) {
-        if (dataset.isPresent()) {
-            return dataset.get().count();
-        }
-
-        return 0l;
+        return dataset
+                .flatMap(ds -> Optional.of(ds.count()))
+                .orElse(0l);
     }
 
 
     private Optional<Dataset<T>> getFakeRowDataSet(Dataset<T> activeLines, String functionalName, Dataset<T> activeLinesNotInStaging, Encoder<T> dimensionEncoder) {
         Dataset<T> fakeRowDataSet = activeLines
-                .filter(col(functionalName).equalTo(DimensionColumnSelector.getFakeFunctionalIdValue(dimensionClass)));
+                .filter(col(functionalName).equalTo(dimensionColumnSelector.getFakeFunctionalIdValue()));
+
         if (fakeRowDataSet.count() == 0) {
-            Row fakeRow = DimensionColumnSelector.getFakeRow(inventoryDate, activeLinesNotInStaging.columns(), dimensionClass);
+            Row fakeRow = dimensionColumnSelector.getFakeRow(inventoryDate, activeLinesNotInStaging.columns());
             fakeRowDataSet = sparkSession.createDataFrame(Arrays.asList(fakeRow), activeLinesNotInStaging.schema()).as(dimensionEncoder);
             //here we are calculating scd1 and scd2 checksum
             return Optional.of(fakeRowDataSet
-                    .select(DimensionColumnSelector.getFakeRowColumns(dimensionClass))
+                    .select(dimensionColumnSelector.getFakeRowColumns())
                     .as(dimensionEncoder));
         }
 
@@ -174,7 +181,7 @@ public class DimensionProcessor<T extends Dimension> implements Processor {
 
     private Dataset<Row> getLookUpTable(String currentFlagName, Dataset<T> allRows) {
         return allRows.filter(col(currentFlagName).equalTo("Y"))
-                .select(DimensionColumnSelector.getLookupTableColumns(dimensionClass));
+                .select(dimensionColumnSelector.getLookupTableColumns());
     }
 
     private Dataset<T> getAllLinesWithNewTechnicalId(Long maxId, Dataset<Row> newLines, Optional<Dataset<Row>> scd2NewLines, Encoder<T> dimensionEncoder) {
@@ -207,62 +214,52 @@ public class DimensionProcessor<T extends Dimension> implements Processor {
     }
 
     private Optional<Dataset<Row>> getSCD2LinesToCreate(Optional<Dataset<Row>> scd2Lines) {
-        if (scd2Lines.isPresent()) {
-            return Optional.of(
-                    scd2Lines.get()
-                            .select(DimensionColumnSelector.getNewSCD2Columns(inventoryDate, dimensionClass)));
-        }
-
-        return Optional.empty();
+        return scd2Lines
+                .flatMap(scd2Dataset -> Optional.of(
+                        scd2Dataset.select(dimensionColumnSelector.getNewSCD2Columns(inventoryDate, Alias.CURRENT.getLabel(), Alias.STAGE.getLabel()))
+                        )
+                );
     }
 
     private Optional<Dataset<T>> getSCD2LinesToDeactivate(Optional<Dataset<Row>> scd2Lines, Encoder<T> dimensionEncoder) {
-        if (scd2Lines.isPresent()) {
-            return Optional.of(
-                    scd2Lines.get()
-                            .select(DimensionColumnSelector.getSCD2ColumnsToDeactivate(inventoryDate, dimensionClass))
-                            .as(dimensionEncoder));
-        }
-
-        return Optional.empty();
+        return scd2Lines
+                .flatMap(scd2Dataset -> Optional.of(
+                        scd2Dataset.select(dimensionColumnSelector.getSCD2ColumnsToDeactivate(inventoryDate, Alias.CURRENT.getLabel()))
+                                .as(dimensionEncoder)
+                        )
+                );
     }
 
     private Optional<Dataset<Row>> getSCD2Lines(Dataset<Row> joinedActiveLines) {
-        Optional<Column> columnFilter = DimensionColumnSelector.isSCD2(dimensionClass);
+        Optional<Column> columnFilter = dimensionColumnSelector.isSCD2(Alias.CURRENT.getLabel(), Alias.STAGE.getLabel());
 
-        if (columnFilter.isPresent()) {
-            return Optional.of(joinedActiveLines.filter(columnFilter.get()));
-        }
-
-        return Optional.empty();
-
+        return columnFilter.flatMap(
+                filter -> Optional.of(joinedActiveLines.filter(filter))
+        );
     }
 
     private Optional<Dataset<T>> getScd1Lines(Dataset<Row> joinedActiveLines, Encoder<T> dimensionEncoder) {
-        Optional<Column> columnFilter = DimensionColumnSelector.isSCD1(dimensionClass);
+        Optional<Column> columnFilter = dimensionColumnSelector.isSCD1(Alias.CURRENT.getLabel(), Alias.STAGE.getLabel());
 
-        if (columnFilter.isPresent()) {
-            return Optional.of(joinedActiveLines
-                    .filter(columnFilter.get())
-                    .select(DimensionColumnSelector.getSCD1Columns(inventoryDate, dimensionClass)).as(dimensionEncoder));
-        }
-
-        return Optional.empty();
-
+        return columnFilter.flatMap(filter -> Optional.of(
+                joinedActiveLines
+                        .filter(filter)
+                        .select(dimensionColumnSelector.getSCD1Columns(Alias.CURRENT.getLabel(), Alias.STAGE.getLabel()))
+                        .as(dimensionEncoder)
+                )
+        );
     }
 
     private Optional<Dataset<T>> getUnchangedLines(Column[] allColumnsFromCurrentAlias, Dataset<Row> joinedActiveLines, Encoder<T> dimensionEncoder) {
-        Optional<Column> columnFilter = DimensionColumnSelector.isSCD1AndSCD2Equal(dimensionClass);
+        Optional<Column> columnFilter = dimensionColumnSelector.isSCD1AndSCD2Equal(Alias.CURRENT.getLabel(), Alias.STAGE.getLabel());
 
-        if (columnFilter.isPresent()) {
-            return Optional.of(
-                    joinedActiveLines
-                            .filter(columnFilter.get())
-                            .select(allColumnsFromCurrentAlias).as(dimensionEncoder));
-        }
-
-        return Optional.empty();
-
+        return columnFilter.flatMap(filter -> Optional.of(
+                joinedActiveLines
+                        .filter(filter)
+                        .select(allColumnsFromCurrentAlias)
+                        .as(dimensionEncoder)
+                )
+        );
     }
 
     /***
@@ -274,11 +271,13 @@ public class DimensionProcessor<T extends Dimension> implements Processor {
      */
     private Dataset<Row> fullJoinCurrentAndStaging(Dataset<Row> stagingTable, String functionalName, Dataset<T> activeLines) {
 
-        String stagingFunctionalName = DimensionColumnSelector.getColumnNameWithAlias(CommonColumnSelector.ALIAS_STAGE, functionalName);
-        String currentFunctionalName = DimensionColumnSelector.getColumnNameWithAlias(CommonColumnSelector.ALIAS_CURRENT, functionalName);
+        String stagingFunctionalName = dimensionColumnSelector.getColumnNameWithAlias(Alias.STAGE.getLabel(), functionalName);
+        String currentFunctionalName = dimensionColumnSelector.getColumnNameWithAlias(Alias.CURRENT.getLabel(), functionalName);
 
-        return activeLines.alias(CommonColumnSelector.ALIAS_CURRENT)
-                .join(stagingTable.alias(CommonColumnSelector.ALIAS_STAGE), col(stagingFunctionalName).equalTo(col(currentFunctionalName)), "outer");
+        return activeLines.alias(Alias.CURRENT.getLabel())
+                .join(stagingTable.alias(Alias.STAGE.getLabel()), col(stagingFunctionalName)
+                        .equalTo(col(currentFunctionalName)), "outer");
+
     }
 
     /***
@@ -289,8 +288,8 @@ public class DimensionProcessor<T extends Dimension> implements Processor {
      */
     private Dataset<Row> getLinesInStagingAndCurrentTable(Dataset<Row> fullJoinDataset, String functionalName) {
 
-        String stagingFunctionalName = DimensionColumnSelector.getColumnNameWithAlias(CommonColumnSelector.ALIAS_STAGE, functionalName);
-        String currentFunctionalName = DimensionColumnSelector.getColumnNameWithAlias(CommonColumnSelector.ALIAS_CURRENT, functionalName);
+        String stagingFunctionalName = dimensionColumnSelector.getColumnNameWithAlias(Alias.STAGE.getLabel(), functionalName);
+        String currentFunctionalName = dimensionColumnSelector.getColumnNameWithAlias(Alias.CURRENT.getLabel(), functionalName);
 
         return fullJoinDataset
                 .filter(col(stagingFunctionalName).isNotNull()
@@ -304,11 +303,11 @@ public class DimensionProcessor<T extends Dimension> implements Processor {
      * @return get lines that are in staging table and not in current table.
      */
     private Dataset<Row> getNewLines(Dataset<Row> fullJoinDataset, String functionalName) {
-        String currentFunctionalName = DimensionColumnSelector.getColumnNameWithAlias(CommonColumnSelector.ALIAS_CURRENT, functionalName);
+        String currentFunctionalName = dimensionColumnSelector.getColumnNameWithAlias(Alias.CURRENT.getLabel(), functionalName);
 
         return fullJoinDataset
                 .filter(col(currentFunctionalName).isNull())
-                .select(DimensionColumnSelector.getNewLinesColumns(inventoryDate, dimensionClass));
+                .select(dimensionColumnSelector.getNewLinesColumns(inventoryDate, Alias.STAGE.getLabel()));
     }
 
     /***
@@ -320,7 +319,7 @@ public class DimensionProcessor<T extends Dimension> implements Processor {
      * @return get lines that are in current table and not in staging table.
      */
     private Dataset<T> getLinesNotInStagingTable(Dataset<Row> fullJoinDataset, String functionalName, Column[] allColumnsFromCurrentAlias, Encoder<T> dimensionEncoder) {
-        String stagingFunctionalName = DimensionColumnSelector.getColumnNameWithAlias(CommonColumnSelector.ALIAS_STAGE, functionalName);
+        String stagingFunctionalName = dimensionColumnSelector.getColumnNameWithAlias(Alias.STAGE.getLabel(), functionalName);
 
         Dataset<Row> notInStaging = fullJoinDataset
                 .filter(col(stagingFunctionalName).isNull())
@@ -338,7 +337,7 @@ public class DimensionProcessor<T extends Dimension> implements Processor {
     private Dataset<T> getInactiveLines(Dataset<T> currentTable, String currentFlagName, Encoder<T> dimensionEncoder) {
         return currentTable
                 .filter(col(currentFlagName).equalTo(lit("N")))
-                .select(DimensionColumnSelector.getInactiveLinesColumns(dimensionClass))
+                .select(dimensionColumnSelector.getInactiveLinesColumns())
                 .as(dimensionEncoder);
     }
 }

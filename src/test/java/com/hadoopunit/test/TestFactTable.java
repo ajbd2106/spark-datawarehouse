@@ -6,19 +6,17 @@ import com.sink.SinkFactory;
 import com.sink.SinkType;
 import com.source.IFactSourceFactory;
 import com.source.PostGreSqlFactSourceFactory;
-import com.source.SourceType;
 import com.spark.SparkSessionFactory;
+import com.starschema.Processor;
 import com.starschema.ProcessorFactory;
-import com.starschema.annotations.general.Table;
+import com.starschema.annotations.common.Table;
+import com.starschema.columnSelector.AnnotatedFactColumnSelector;
 import com.starschema.dimension.junk.JunkDimension;
-import com.starschema.fact.FactProcessor;
 import com.starschema.fact.FactTable;
-import com.starschema.fact.FlattenedFactProcessor;
 import org.apache.spark.sql.SparkSession;
 import org.junit.Test;
 
 import java.math.BigDecimal;
-import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,7 +40,8 @@ public class TestFactTable {
         ISink factSink = SinkFactory.createSink(SinkType.POSTGRESQL, FactTable.class.getAnnotation(Table.class));
         IFactSourceFactory factSourceFactory = new PostGreSqlFactSourceFactory();
 
-        FlattenedFactProcessor<FactTable> flattenedFactProcessor = ProcessorFactory.createFlattenedFactProcessor(sparkSession, FactTable.class, LocalDate.now(), beanSourceMock, factSourceFactory, factSink);
+        Processor<FactTable> flattenedFactProcessor = ProcessorFactory.createFlattenedFactProcessor(sparkSession, FactTable.class, LocalDate.now(), beanSourceMock, factSourceFactory, factSink,
+                new AnnotatedFactColumnSelector(FactTable.class));
         flattenedFactProcessor.process();
     }
 

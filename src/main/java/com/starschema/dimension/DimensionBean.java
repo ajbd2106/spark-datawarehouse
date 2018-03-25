@@ -1,7 +1,7 @@
 package com.starschema.dimension;
 
 import com.starschema.annotations.dimensions.*;
-import com.starschema.annotations.general.Table;
+import com.starschema.annotations.common.Table;
 import com.starschema.lookup.PartyLookup;
 import lombok.Data;
 
@@ -9,7 +9,7 @@ import java.sql.Date;
 
 
 @Data
-@Table(name = "newTable", lookupType = PartyLookup.class, stagingTable = "stagingTable", masterTable = "currentTable")
+@Table(name = "newTable", lookupType = PartyLookup.class, stagingTable = "stagingTable", masterTable = "currentTable", oldTable = "oldTable")
 public class DimensionBean implements Dimension {
 
     @TechnicalId

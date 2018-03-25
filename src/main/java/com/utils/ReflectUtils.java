@@ -25,10 +25,10 @@ public class ReflectUtils {
         Validate.isTrue(annotationCls != null, "The annotation class must not be null", new Object[0]);
         List<Field> allFields = getAllFieldsList(cls);
         List<Field> annotatedFields = new ArrayList();
-        Iterator i$ = allFields.iterator();
+        Iterator fieldsIterator = allFields.iterator();
 
-        while (i$.hasNext()) {
-            Field field = (Field) i$.next();
+        while (fieldsIterator.hasNext()) {
+            Field field = (Field) fieldsIterator.next();
             if (field.getAnnotation(annotationCls) != null) {
                 annotatedFields.add(field);
             }
@@ -60,15 +60,15 @@ public class ReflectUtils {
         return Optional.empty();
     }
 
-    public static void checkExistsAndUnique(Class<? extends Annotation> annotation, Class<?> cls){
+    public static void checkExistsAndUnique(Class<? extends Annotation> annotation, Class<?> cls) {
 
         List<Field> fieldList = getFieldsListWithAnnotation(cls, annotation);
 
-        if(fieldList == null || fieldList.size() == 0){
+        if (fieldList == null || fieldList.size() == 0) {
             throw new RuntimeException(String.format("Class %s should have an annotation of type %s", cls.getCanonicalName(), annotation.getSimpleName()));
         }
 
-        if(fieldList.size() > 1){
+        if (fieldList.size() > 1) {
             throw new RuntimeException(String.format("Cannot have several annotation of type %s on class %s", annotation.getSimpleName(), cls.getCanonicalName()));
         }
 

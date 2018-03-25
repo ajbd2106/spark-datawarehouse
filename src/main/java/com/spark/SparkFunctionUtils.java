@@ -5,9 +5,14 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.LongType;
+import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.function.BinaryOperator;
 
 import static org.apache.spark.sql.functions.max;
 
@@ -39,6 +44,36 @@ public class SparkFunctionUtils {
                 });
 
         return sparkSession.createDataFrame(newLinesWithTechnicalId, schema);
+    }
+
+    public static Dataset<Row> addTechnicalId(SparkSession sparkSession, Long offset, Dataset<Row> newLines) {
+        StructType schema = newLines.schema();
+
+        StructType newSchema = new StructType();
+        newSchema = newSchema.add("technicalId", DataTypes.LongType);
+
+        for(StructField structField : schema.fields()){
+            newSchema = newSchema.add(structField.name(), structField.dataType());
+        }
+
+        JavaRDD<Row> newLinesWithTechnicalId = newLines
+                .toJavaRDD()
+                .zipWithIndex()
+                .map(tuple -> {
+                    Row currentRow = tuple._1;
+                    Long technicalId = tuple._2;
+                    Object[] object = new Object[currentRow.length() +1];
+                    object[0] = technicalId + offset + 1;
+                    //don't take first field which should be a fake technical id
+                    for (int i = 0; i < tuple._1.length(); i++) {
+                        object[i +1] = tuple._1.get(i);
+                    }
+                    return RowFactory.create(object);
+                });
+
+
+
+        return sparkSession.createDataFrame(newLinesWithTechnicalId, newSchema);
     }
 
     public static Long getMaxRowId(Dataset dataset, String fieldName){

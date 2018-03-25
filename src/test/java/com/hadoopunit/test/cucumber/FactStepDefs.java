@@ -7,6 +7,7 @@ import com.hadoopunit.test.sources.MockFactSourceFactory;
 import com.hadoopunit.test.spark.TestSparkSession;
 import com.hadoopunit.test.utils.CucumberUtils;
 import com.starschema.ProcessorFactory;
+import com.starschema.columnSelector.AnnotatedFactColumnSelector;
 import com.starschema.dimension.DimensionBean;
 import com.starschema.dimension.junk.JunkDimension;
 import com.starschema.fact.AbstractFactProcessor;
@@ -33,10 +34,10 @@ public class FactStepDefs implements En {
 
     public FactStepDefs() {
 
-        Before(()-> {
+        Before(() -> {
             factSink.clear();
             mockFactSourceFactory.clear();
-            if(factStagingData != null){
+            if (factStagingData != null) {
                 factStagingData.clear();
             }
 
@@ -71,12 +72,15 @@ public class FactStepDefs implements En {
         });
 
         When("^i process fact with date as of \"([^\"]*)\"$", (String inventoryDate) -> {
-            factProcessor = ProcessorFactory.createFactProcessor(TestSparkSession.getInstance().getSparkSession(), FactTable.class, LocalDate.parse(inventoryDate, localDateFormatter), factStagingData, mockFactSourceFactory, factSink);
+            factProcessor = ProcessorFactory.createFactProcessor(TestSparkSession.getInstance().getSparkSession(), FactTable.class, LocalDate.parse(inventoryDate, localDateFormatter), factStagingData, mockFactSourceFactory, factSink,
+                    new AnnotatedFactColumnSelector(FactTable.class)
+            );
             factProcessor.process();
         });
 
         When("^i process fact with date as of \"([^\"]*)\" and flattenize option$", (String inventoryDate) -> {
-            factProcessor = ProcessorFactory.createFlattenedFactProcessor(TestSparkSession.getInstance().getSparkSession(), FactTable.class, LocalDate.parse(inventoryDate, localDateFormatter), factStagingData, mockFactSourceFactory, factSink);
+            factProcessor = ProcessorFactory.createFlattenedFactProcessor(TestSparkSession.getInstance().getSparkSession(), FactTable.class, LocalDate.parse(inventoryDate, localDateFormatter), factStagingData, mockFactSourceFactory, factSink,
+                    new AnnotatedFactColumnSelector(FactTable.class));
             factProcessor.process();
         });
 
@@ -94,12 +98,12 @@ public class FactStepDefs implements En {
 
         Then("^no lines should be added to junk dimension data$", () -> {
             int sinkSize = mockFactSourceFactory.getSinkMap().get(JunkDimension.class.getSimpleName()).getInsertResult().size();
-            Assert.assertTrue(String.format("%d lines will be added to junk dimension data. Expected 0", sinkSize),  sinkSize == 0);
+            Assert.assertTrue(String.format("%d lines will be added to junk dimension data. Expected 0", sinkSize), sinkSize == 0);
         });
 
         Then("^no lines should be added to junk lookup dimension data$", () -> {
             int sinkSize = mockFactSourceFactory.getSinkMap().get(JunkDimensionLookup.class.getSimpleName()).getInsertResult().size();
-            Assert.assertTrue(String.format("%d lines will be added to junk dimension data. Expected 0", sinkSize),  sinkSize == 0);
+            Assert.assertTrue(String.format("%d lines will be added to junk dimension data. Expected 0", sinkSize), sinkSize == 0);
         });
 
         Then("^i should get this fact table data$", (DataTable expectedLines) -> {
