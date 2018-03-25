@@ -35,14 +35,17 @@ public class TestFactTable {
         BeanSourceMock<FactTable> beanSourceMock = new BeanSourceMock(FactTable.class, factTable);
         SparkSession sparkSession = SparkSessionFactory.createClassicSparkSession("local[*]", "Java Spark SQL basic example");
 
-//        FactProcessor<FactTable> factProcessor = ProcessorFactory.createFactProcessor(sparkSession, FactTable.class, LocalDate.now(), beanSourceMock, SourceType.POSTGRESQL, SinkType.POSTGRESQL);
-//        factProcessor.process();
         ISink factSink = SinkFactory.createSink(SinkType.POSTGRESQL, FactTable.class.getAnnotation(Table.class));
         IFactSourceFactory factSourceFactory = new PostGreSqlFactSourceFactory();
 
-        Processor<FactTable> flattenedFactProcessor = ProcessorFactory.createFlattenedFactProcessor(sparkSession, FactTable.class, LocalDate.now(), beanSourceMock, factSourceFactory, factSink,
-                new AnnotatedFactColumnSelector(FactTable.class));
-        flattenedFactProcessor.process();
+        Processor<FactTable> factProcessor = ProcessorFactory.createFactProcessor(
+                sparkSession, FactTable.class, LocalDate.now(), beanSourceMock, factSourceFactory, factSink, new AnnotatedFactColumnSelector(FactTable.class)
+        );
+        factProcessor.process();
+
+//        Processor<FactTable> flattenedFactProcessor = ProcessorFactory.createFlattenedFactProcessor(sparkSession, FactTable.class, LocalDate.now(), beanSourceMock, factSourceFactory, factSink,
+//                new AnnotatedFactColumnSelector(FactTable.class));
+//        flattenedFactProcessor.process();
     }
 
     private FactTable createFactData(String partyRole1FuncId, String partyRole2FuncId, BigDecimal amount1, BigDecimal amount2, String junkDimension1Field1, String junkDimension2Field1) {
